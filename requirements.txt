@@ -1,0 +1,10 @@
+Flask
+opencv-python
+numpy
+scipy
+scikit-learn
+Werkzeug
+Jinja2
+click
+markupsafe
+itsdangerous

@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D-3D Mapping Visualizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .upload-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .upload-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .upload-box {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-box:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .upload-box.dragover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.2s ease;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .upload-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .visualization-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .panel h3 {
+            margin-bottom: 15px;
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        #imageCanvas {
+            max-width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            cursor: crosshair;
+        }
+
+        #threejs-container {
+            width: 100%;
+            height: 400px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .info-panel {
+            grid-column: 1 / -1;
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .correspondence-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+        }
+
+        .correspondence-item {
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+            font-size: 0.9em;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .controls {
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .reset-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .reset-btn:hover {
+            background: #c82333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>2D-3D Mapping Visualizer</h1>
+            <p>Map pixels from 2D images to 3D point cloud coordinates</p>
+        </div>
+
+        <div class="upload-section">
+            <h3>Upload Files</h3>
+            <div class="upload-grid">
+                <div class="upload-box" onclick="document.getElementById('imageFile').click()">
+                    <div>📷</div>
+                    <h4>2D Image</h4>
+                    <p>Upload your close-up photo (.jpg, .png)</p>
+                    <p id="imageFileName" style="font-size: 0.8em; color: #666; margin-top: 5px;">No file selected</p>
+                    <input type="file" id="imageFile" class="file-input" accept=".jpg,.jpeg,.png" onchange="updateFileName('imageFile', 'imageFileName')">
+                    <script>
+                    function updateFileName(inputId, displayId) {
+                        const input = document.getElementById(inputId);
+                        const display = document.getElementById(displayId);
+                        if (input.files.length > 0) {
+                            display.textContent = input.files[0].name;
+                        } else {
+                            display.textContent = 'No file selected';
+                        }
+                    }
+                    </script>
+                </div>
+                <div class="upload-box" onclick="document.getElementById('modelFile').click()">
+                    <div>🏗️</div>
+                    <h4>3D Model</h4>
+                    <p>Upload your 3D model (.obj)</p>
+                    <p id="modelFileName" style="font-size: 0.8em; color: #666; margin-top: 5px;">No file selected</p>
+                    <input type="file" id="modelFile" class="file-input" accept=".obj" onchange="updateFileName('modelFile', 'modelFileName')">
+                </div>
+            </div>
+            <div style="text-align: center;">
+                <button class="upload-btn" onclick="console.log('Process Files button clicked'); uploadFiles()">Process Files</button>
+            </div>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Processing files...</p>
+            </div>
+        </div>
+
+        <div class="visualization-section" id="visualizationSection" style="display: none;">
+            <div class="panel">
+                <h3>2D Image</h3>
+                <canvas id="imageCanvas"></canvas>
+                <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                    Click on the image to map pixels to 3D coordinates
+                </p>
+            </div>
+            <div class="panel">
+                <h3>3D Model</h3>
+                <div id="threejs-container"></div>
+                <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                    Use mouse to rotate, zoom, and pan the 3D model
+                </p>
+            </div>
+        </div>
+
+        <div class="info-panel" id="infoPanel" style="display: none;">
+            <h3>Mapping Information</h3>
+            <div id="statusMessages"></div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+                <div>
+                    <h4>Current Mapping</h4>
+                    <div id="currentMapping">Click on the image to see mapping results</div>
+                </div>
+                <div>
+                    <h4>Correspondences Found</h4>
+                    <div id="correspondenceCount">0</div>
+                    <div class="correspondence-list" id="correspondenceList"></div>
+                </div>
+            </div>
+            <div class="controls">
+                <button class="reset-btn" onclick="resetSession()">Reset Session</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, controls;
+        let pointCloud3D = null;
+        let imageCanvas, imageCtx;
+        let currentImage = null;
+
+        // Initialize Three.js scene
+        function initThreeJS() {
+            const container = document.getElementById('threejs-container');
+            if (!container) {
+                console.error('threejs-container not found!');
+                return;
+            }
+            
+            // Check if container has dimensions
+            if (container.clientWidth === 0 || container.clientHeight === 0) {
+                console.error('threejs-container has zero dimensions:', container.clientWidth, 'x', container.clientHeight);
+                return;
+            }
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf0f0f0);
+            
+            camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+            camera.position.set(0, 0, 5);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+            
+            // Add lighting for mesh visualization
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6); // Soft ambient light
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+            directionalLight2.position.set(-10, -10, -5);
+            scene.add(directionalLight2);
+            
+            console.log('Three.js scene initialized and renderer appended to container. Container size:', container.clientWidth, 'x', container.clientHeight);
+            
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            
+
+            
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Initialize image canvas
+        function initImageCanvas() {
+            imageCanvas = document.getElementById('imageCanvas');
+            imageCtx = imageCanvas.getContext('2d');
+            
+            imageCanvas.addEventListener('click', onImageClick);
+        }
+
+        function onImageClick(event) {
+            if (!currentImage) return;
+            
+            const rect = imageCanvas.getBoundingClientRect();
+            const scaleX = currentImage.width / imageCanvas.width;
+            const scaleY = currentImage.height / imageCanvas.height;
+            
+            const x = (event.clientX - rect.left) * scaleX;
+            const y = (event.clientY - rect.top) * scaleY;
+            
+            mapPixelTo3D(x, y);
+        }
+
+        async function mapPixelTo3D(x, y) {
+            try {
+                const response = await fetch('/map_pixel', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ x: x, y: y })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus(`Pixel (${x.toFixed(0)}, ${y.toFixed(0)}) maps to 3D point: (${result.point_3d[0].toFixed(3)}, ${result.point_3d[1].toFixed(3)}, ${result.point_3d[2].toFixed(3)})`, 'success');
+                    
+                    // Highlight the 3D point
+                    highlightPoint3D(result.point_3d);
+                    
+                    // Update current mapping display
+                    document.getElementById('currentMapping').innerHTML = `
+                        <strong>2D Pixel:</strong> (${x.toFixed(0)}, ${y.toFixed(0)})<br>
+                        <strong>3D Point:</strong> (${result.point_3d[0].toFixed(3)}, ${result.point_3d[1].toFixed(3)}, ${result.point_3d[2].toFixed(3)})
+                    `;
+                } else {
+                    showStatus(result.message || 'No 3D correspondence found', 'error');
+                }
+            } catch (error) {
+                showStatus('Error mapping pixel: ' + error.message, 'error');
+            }
+        }
+
+        function highlightPoint3D(point) {
+            // Remove previous highlight
+            const existingHighlight = scene.getObjectByName('highlight');
+            if (existingHighlight) {
+                scene.remove(existingHighlight);
+            }
+            
+            // Add new highlight
+            const geometry = new THREE.SphereGeometry(0.05, 16, 16);
+            const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const sphere = new THREE.Mesh(geometry, material);
+            sphere.position.set(point[0], point[1], point[2]);
+            sphere.name = 'highlight';
+            scene.add(sphere);
+        }
+
+        async function uploadFiles() {
+            console.log('uploadFiles function called'); // New log statement
+            const imageFile = document.getElementById('imageFile').files[0];
+            const modelFile = document.getElementById('modelFile').files[0];
+            
+            console.log('Image file:', imageFile);
+            console.log('Model file:', modelFile);
+            
+            if (!imageFile || !modelFile) {
+                console.log('Missing files - showing error');
+                showStatus('Please select both image and model files', 'error');
+                return;
+            }
+            
+            // Validate file types
+            const imageTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+            const modelTypes = ['application/octet-stream', 'text/plain']; // .obj files
+            
+            if (!imageTypes.includes(imageFile.type) && !imageFile.name.toLowerCase().match(/\.(jpg|jpeg|png)$/)) {
+                showStatus('Please select a valid image file (.jpg, .jpeg, .png)', 'error');
+                return;
+            }
+            
+            if (!modelFile.name.toLowerCase().endsWith('.obj')) {
+                showStatus('Please select a valid OBJ model file (.obj)', 'error');
+                return;
+            }
+            
+            // Check file sizes
+            const maxSize = 50 * 1024 * 1024; // 50MB
+            if (imageFile.size > maxSize || modelFile.size > maxSize) {
+                showStatus('File size too large. Maximum size is 16MB per file.', 'error');
+                return;
+            }
+            
+            showStatus(`Uploading files: ${imageFile.name} (${(imageFile.size/1024/1024).toFixed(2)}MB) and ${modelFile.name} (${(modelFile.size/1024/1024).toFixed(2)}MB)`, 'info');
+            
+            const formData = new FormData();
+            formData.append('image', imageFile);
+            formData.append('model', modelFile);
+            
+            document.getElementById('loading').style.display = 'block';
+            document.querySelector('.upload-btn').disabled = true;
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Server error response:', errorText);
+                    showStatus(`Server error (${response.status}): ${errorText}`, 'error');
+                    return;
+                }
+                
+                const result = await response.json();
+                console.log('Upload result:', result);
+                
+                if (result.success) {
+                    showStatus(result.message, 'success');
+                    await loadVisualization(result.image_path);
+                    
+                    // Show visualization section first
+                    document.getElementById('visualizationSection').style.display = 'grid';
+                    document.getElementById('infoPanel').style.display = 'block';
+                    
+                    // Initialize Three.js after container is visible
+                    initThreeJS();
+                    
+                    // Load 3D model after Three.js is initialized
+                    await load3DModel();
+                    
+                    document.getElementById('correspondenceCount').textContent = result.correspondences_count;
+                    loadCorrespondences();
+                } else {
+                    showStatus(result.error || 'Unknown error occurred', 'error');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showStatus('Upload error: ' + error.message, 'error');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.querySelector('.upload-btn').disabled = false;
+            }
+        }
+
+        async function loadVisualization(imagePath) {
+            // Load image
+            const img = new Image();
+            img.onload = function() {
+                currentImage = img;
+                imageCanvas.width = Math.min(img.width, 600);
+                imageCanvas.height = (img.height * imageCanvas.width) / img.width;
+                imageCtx.drawImage(img, 0, 0, imageCanvas.width, imageCanvas.height);
+            };
+            img.src = '/uploads/' + imagePath;
+            
+            // Note: 3D model loading moved to after Three.js initialization
+        }
+
+        async function load3DModel() {
+            try {
+                const response = await fetch('/get_3d_model');
+                const modelData = await response.json();
+                console.log('Received 3D model data:', modelData);
+                
+                if (modelData.error) {
+                    showStatus(modelData.error, 'error');
+                    return;
+                }
+                
+                // Remove existing model
+                if (pointCloud3D) {
+                    scene.remove(pointCloud3D);
+                }
+                
+                // Create geometry
+                const geometry = new THREE.BufferGeometry();
+                const positions = new Float32Array(modelData.points.flat());
+                console.log('Positions array:', positions);
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                
+                let model3D;
+                
+                // Create mesh if faces are available, otherwise use points
+                if (modelData.faces && modelData.faces.length > 0) {
+                    console.log('Creating mesh with', modelData.face_count, 'faces');
+                    
+                    // Create face indices for Three.js
+                    const indices = new Uint32Array(modelData.faces.flat());
+                    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+                    
+                    // Compute normals for proper lighting
+                    geometry.computeVertexNormals();
+                    
+                    // Create mesh material
+                    const material = new THREE.MeshLambertMaterial({ 
+                        color: 0x0080ff,
+                        wireframe: false,
+                        side: THREE.DoubleSide
+                    });
+                    
+                    model3D = new THREE.Mesh(geometry, material);
+                    
+                    // Add wireframe overlay for better visualization
+                    const wireframeMaterial = new THREE.MeshBasicMaterial({ 
+                        color: 0x404040, 
+                        wireframe: true,
+                        transparent: true,
+                        opacity: 0.3
+                    });
+                    const wireframe = new THREE.Mesh(geometry, wireframeMaterial);
+                    model3D.add(wireframe);
+                    
+                } else {
+                    console.log('Creating point cloud with', modelData.count, 'points');
+                    
+                    const material = new THREE.PointsMaterial({ 
+                        color: 0x0080ff, 
+                        size: 0.02,
+                        sizeAttenuation: true
+                    });
+                    
+                    model3D = new THREE.Points(geometry, material);
+                }
+                
+                pointCloud3D = model3D;
+                scene.add(pointCloud3D);
+                
+                // Center camera on model
+                geometry.computeBoundingBox();
+                const center = geometry.boundingBox.getCenter(new THREE.Vector3());
+                controls.target.copy(center);
+                camera.position.set(center.x, center.y, center.z + 5);
+
+                console.log('Bounding Box:', geometry.boundingBox);
+                console.log('Center:', center);
+                console.log('Camera Position:', camera.position);
+                
+                // Load correspondences after model is loaded
+                await loadCorrespondences();
+                
+            } catch (error) {
+                showStatus('Error loading 3D model: ' + error.message, 'error');
+            }
+        }
+
+        let correspondenceMarkers3D = [];
+        let correspondenceMarkers2D = [];
+        
+        async function loadCorrespondences() {
+            try {
+                const response = await fetch('/get_correspondences');
+                const data = await response.json();
+                
+                // Clear existing correspondence markers
+                clearCorrespondenceMarkers();
+                
+                const list = document.getElementById('correspondenceList');
+                list.innerHTML = '';
+                
+                data.correspondences.slice(0, 10).forEach((corr, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'correspondence-item';
+                    item.innerHTML = `
+                        <strong>#${index + 1}</strong><br>
+                        2D: (${corr['2d_point'][0].toFixed(0)}, ${corr['2d_point'][1].toFixed(0)})<br>
+                        3D: (${corr['3d_point'][0].toFixed(3)}, ${corr['3d_point'][1].toFixed(3)}, ${corr['3d_point'][2].toFixed(3)})
+                    `;
+                    
+                    // Add click handler to highlight correspondence
+                    item.addEventListener('click', () => highlightCorrespondence(index, corr));
+                    item.style.cursor = 'pointer';
+                    
+                    list.appendChild(item);
+                });
+                
+                if (data.correspondences.length > 10) {
+                    const more = document.createElement('div');
+                    more.className = 'correspondence-item';
+                    more.innerHTML = `... and ${data.correspondences.length - 10} more`;
+                    list.appendChild(more);
+                }
+                
+                // Add correspondence markers to 3D scene
+                addCorrespondenceMarkers3D(data.correspondences.slice(0, 10));
+                
+                // Add correspondence markers to 2D image
+                addCorrespondenceMarkers2D(data.correspondences.slice(0, 10));
+                
+            } catch (error) {
+                showStatus('Error loading correspondences: ' + error.message, 'error');
+            }
+        }
+        
+        function clearCorrespondenceMarkers() {
+            // Remove 3D markers
+            correspondenceMarkers3D.forEach(marker => {
+                scene.remove(marker);
+            });
+            correspondenceMarkers3D = [];
+            
+            // Remove 2D markers
+            correspondenceMarkers2D.forEach(marker => {
+                if (marker.parentNode) {
+                    marker.parentNode.removeChild(marker);
+                }
+            });
+            correspondenceMarkers2D = [];
+        }
+        
+        function addCorrespondenceMarkers3D(correspondences) {
+            correspondences.forEach((corr, index) => {
+                const geometry = new THREE.SphereGeometry(0.05, 8, 6);
+                const material = new THREE.MeshBasicMaterial({ 
+                    color: 0xff0000,
+                    transparent: true,
+                    opacity: 0.8
+                });
+                const marker = new THREE.Mesh(geometry, material);
+                marker.position.set(corr['3d_point'][0], corr['3d_point'][1], corr['3d_point'][2]);
+                marker.userData = { correspondenceIndex: index };
+                
+                scene.add(marker);
+                correspondenceMarkers3D.push(marker);
+            });
+        }
+        
+        function addCorrespondenceMarkers2D(correspondences) {
+            const imageContainer = document.getElementById('imageContainer');
+            if (!imageContainer) return;
+            
+            correspondences.forEach((corr, index) => {
+                const marker = document.createElement('div');
+                marker.className = 'correspondence-marker-2d';
+                marker.style.cssText = `
+                    position: absolute;
+                    width: 10px;
+                    height: 10px;
+                    background-color: red;
+                    border: 2px solid white;
+                    border-radius: 50%;
+                    transform: translate(-50%, -50%);
+                    cursor: pointer;
+                    z-index: 10;
+                    left: ${corr['2d_point'][0]}px;
+                    top: ${corr['2d_point'][1]}px;
+                `;
+                
+                marker.addEventListener('click', () => highlightCorrespondence(index, corr));
+                marker.title = `Correspondence #${index + 1}`;
+                
+                imageContainer.appendChild(marker);
+                correspondenceMarkers2D.push(marker);
+            });
+        }
+        
+        function highlightCorrespondence(index, correspondence) {
+            // Reset all markers to normal state
+            correspondenceMarkers3D.forEach((marker, i) => {
+                marker.material.color.setHex(i === index ? 0x00ff00 : 0xff0000);
+                marker.scale.set(i === index ? 1.5 : 1, i === index ? 1.5 : 1, i === index ? 1.5 : 1);
+            });
+            
+            correspondenceMarkers2D.forEach((marker, i) => {
+                marker.style.backgroundColor = i === index ? 'lime' : 'red';
+                marker.style.transform = i === index ? 'translate(-50%, -50%) scale(1.5)' : 'translate(-50%, -50%) scale(1)';
+            });
+            
+            // Highlight the correspondence item in the list
+            const items = document.querySelectorAll('.correspondence-item');
+            items.forEach((item, i) => {
+                item.style.backgroundColor = i === index ? '#e6f3ff' : '';
+            });
+            
+            console.log(`Highlighted correspondence #${index + 1}:`, correspondence);
+        }
+
+        async function resetSession() {
+            try {
+                await fetch('/reset');
+                location.reload();
+            } catch (error) {
+                showStatus('Error resetting session: ' + error.message, 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            console.log('showStatus called:', message, type);
+            
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            
+            const container = document.getElementById('statusMessages');
+            if (container) {
+                container.appendChild(statusDiv);
+                console.log('Status message added to container');
+            } else {
+                console.error('Status container not found!');
+            }
+            
+            // Remove after 5 seconds
+            setTimeout(() => {
+                if (statusDiv.parentNode) {
+                    statusDiv.parentNode.removeChild(statusDiv);
+                }
+            }, 5000);
+        }
+
+        // Update file name display when file is selected
+        function updateFileName(inputId, displayId) {
+            const input = document.getElementById(inputId);
+            const display = document.getElementById(displayId);
+            
+            if (input.files.length > 0) {
+                display.textContent = input.files[0].name;
+                display.style.color = '#667eea';
+                
+                // Enable upload button if both files are selected
+                const imageFile = document.getElementById('imageFile').files[0];
+                const modelFile = document.getElementById('modelFile').files[0];
+                const uploadBtn = document.querySelector('.upload-btn');
+                
+                if (imageFile && modelFile) {
+                    uploadBtn.style.opacity = '1';
+                    uploadBtn.style.cursor = 'pointer';
+                } else {
+                    uploadBtn.style.opacity = '0.7';
+                }
+            } else {
+                display.textContent = 'No file selected';
+                display.style.color = '#666';
+            }
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', function() {
+            initImageCanvas();
+            // Note: initThreeJS() is now called after files are uploaded and container is visible
+            
+            // Set initial upload button state
+            const uploadBtn = document.querySelector('.upload-btn');
+            uploadBtn.style.opacity = '0.7';
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            const container = document.getElementById('threejs-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        });
+    </script>
+</body>
+</html>
